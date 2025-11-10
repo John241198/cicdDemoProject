@@ -1,127 +1,59 @@
-pipeline {
+pipeline{
     agent any
     environment {
-        SCANNER_HOME = tool 'sonar-scanner'
+        SCANNER_HOME=tool 'sonar-scanner'
     }
     stages {
-        stage('Checkout Code') {
-            steps {
-                checkout scm
-                script {
-                    echo "Building branch: ${env.BRANCH_NAME}"
-                }
+        stage('Checkout from Git'){
+            steps{
+                git  'https://github.com/John241198/Multibranch-Pipeline.git'
             }
         }
-
-        stage('SonarQube Analysis') {
-            steps {
+        stage("Sonarqube Analysis "){
+            steps{
                 withSonarQubeEnv('sonar-server') {
-                    sh """
-                        ${SCANNER_HOME}/bin/sonar-scanner \
-                        -Dsonar.projectKey=python-app \
-                        -Dsonar.sources=. \
-                        -Dsonar.host.url=$SONAR_HOST_URL
-                    """
+                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=cicd \
+                    -Dsonar.projectKey=cicd '''
                 }
             }
         }
-
-        stage('Quality Gate') {
-            steps {
-                timeout(time: 2, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
-                }
-            }
-        }
-
-        stage('Build Docker Image') {
-            steps {
+        stage("quality gate"){
+           steps {
                 script {
-                    if (env.BRANCH_NAME == "master") {
-                        sh """
-                            docker build -t vijay3639/masterimage . 
-                            docker tag vijay3639/masterimage:latest vijay3639/masterimage:${BUILD_NUMBER}
-                        """
-                    } else if (env.BRANCH_NAME == "developer") {
-                        sh """
-                            docker build -t vijay3639/devimage . 
-                            docker tag vijay3639/devimage:latest vijay3639/devimage:${BUILD_NUMBER}
-                        """
+                    waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token'
+                }
+            }
+        }
+        stage('TRIVY FS SCAN') {
+            steps {
+                sh "trivy fs . > trivyfs.json"
+            }
+        }
+        stage("Docker Build & Push"){
+            steps{
+                script{
+                   withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){
+                       sh "docker build -t cicd ."
+                       sh "docker tag cicd jsnov24/cicd:latest "
+                       sh "docker push jsnov24/cicd:latest "
                     }
                 }
             }
         }
-
-        stage('Trivy Scan') {
-            steps {
-                script {
-                    if (env.BRANCH_NAME == "master") {
-                        sh "trivy image --exit-code 0 --severity HIGH,CRITICAL vijay3639/masterimage:latest"
-                    } else if (env.BRANCH_NAME == "developer") {
-                        sh "trivy image --exit-code 0 --severity HIGH,CRITICAL vijay3639/devimage:latest"
-                    }
-                }
+        stage("TRIVY"){
+            steps{
+                sh "trivy image jsnov24/cicd:latest > trivy.json"
             }
         }
-
-        stage('Push Docker Image') {
-            steps {
-                withCredentials([usernamePassword(credentialsId: 'docker', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                    sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
-
-                    script {
-                        if (env.BRANCH_NAME == "master") {
-                            sh """
-                                docker push vijay3639/masterimage:latest
-                                docker push vijay3639/masterimage:${BUILD_NUMBER}
-                            """
-                        } else if (env.BRANCH_NAME == "developer") {
-                            sh """
-                                docker push vijay3639/devimage:latest
-                                docker push vijay3639/devimage:${BUILD_NUMBER}
-                            """
-                        }
-                    }
-                }
-            }
+        stage ("Remove container") {
+            steps{
+                sh "docker stop cicd | true"
+                sh "docker rm cicd | true"
+             }
         }
-
-        stage('Deploy on Docker') {
-            steps {
-                script {
-                    if (env.BRANCH_NAME == "master") {
-                        sh "docker rm -f masterapp || true"
-                        sh "docker run -itd --name masterapp -p 8010:80 vijay3639/masterimage:latest"
-                    } else if (env.BRANCH_NAME == "developer") {
-                        sh "docker rm -f devapp || true"
-                        sh "docker run -itd --name devapp -p 8020:80 vijay3639/devimage:latest"
-                    }
-                }
-            }
-        }
-
-        stage('Cleanup Old Images') {
-            steps {
-                script {
-                    if (env.BRANCH_NAME == "master") {
-                        sh """
-                            docker images "vijay3639/masterimage" --format "{{.Repository}}:{{.Tag}}" \
-                            | grep -v "latest" \
-                            | grep -v "${BUILD_NUMBER}" \
-                            | xargs -r docker rmi -f
-                        """
-                    } else if (env.BRANCH_NAME == "developer") {
-                        sh """
-                            docker images "vijay3639/devimage" --format "{{.Repository}}:{{.Tag}}" \
-                            | grep -v "latest" \
-                            | grep -v "${BUILD_NUMBER}" \
-                            | xargs -r docker rmi -f
-                        """
-                    }
-
-                    // Clean dangling layers also
-                    sh "docker image prune -f"
-                }
+        stage('Deploy to container'){
+            steps{
+                sh 'docker run -d --name cicd -p 8010:80 jsnov24/cicd:latest'
             }
         }
     }
