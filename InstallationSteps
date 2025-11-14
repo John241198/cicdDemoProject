@@ -14,7 +14,6 @@ echo deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins
 apt update -y
 apt install jenkins -y
 
-
 #Install docker
 apt install docker.io -y
 sudo usermod -aG docker ubuntu
