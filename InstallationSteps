@@ -21,6 +21,8 @@ sudo usermod -aG docker jenkins
 newgrp docker
 sudo chmod 777 /var/run/docker.sock
 sudo systemctl restart jenkins
+
+#SonarQube Installation as part of docker
 docker run -d --name sonar -p 9000:9000 sonarqube:community
 
 #Install trivy
