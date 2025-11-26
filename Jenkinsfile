@@ -6,21 +6,21 @@ pipeline{
     stages {
         stage('Checkout from Git'){
             steps{
-                git  'https://github.com/John241198/Multibranch-Pipeline.git'
+                git  'https://github.com/John241198/cicdDemoProject.git'
             }
         }
         stage("Sonarqube Analysis "){
             steps{
                 withSonarQubeEnv('sonar-server') {
-                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=cicd \
-                    -Dsonar.projectKey=cicd '''
+                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=cicdDemoProject \
+                    -Dsonar.projectKey=cicdDemoProject '''
                 }
             }
         }
         stage("quality gate"){
            steps {
                 script {
-                    waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token'
+                    waitForQualityGate abortPipeline: false, credentialsId: 'sonar-token'
                 }
             }
         }
