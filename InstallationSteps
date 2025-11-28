@@ -1,5 +1,4 @@
 *Create an Ubuntu with t2.xlarge*
-
 sudo apt update
 sudo apt install -y wget gnupg software-properties-common
 wget -qO - https://packages.adoptium.net/artifactory/api/gpg/key/public | sudo apt-key add -
